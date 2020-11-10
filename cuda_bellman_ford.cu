@@ -1,8 +1,6 @@
 /*
  * This is a CUDA version of bellman_ford algorithm
- * Compile: nvcc -std=c++11 -arch=sm_52 -o cuda_bellman_ford cuda_bellman_ford.cu
- * Run: ./cuda_bellman_ford <input file> <number of blocks per grid> <number of threads per block>, you will find the output file 'output.txt'
- * */
+ */
 
 #include <string>
 #include <cassert>
@@ -46,11 +44,12 @@ int read_file(string filename) {
 		abort_with_error_message("ERROR OCCURRED WHILE READING INPUT FILE");
 	}
 	inputf >> N;
-	//input matrix should be smaller than 20MB * 20MB (400MB, we don't have too much memory for multi-processors)
-	assert(N < (1024 * 1024 * 20));
+  // Assume a N by N matrix
 	mat = (int *) malloc(N * N * sizeof(int));
+  // need to change this to COO format
 	for (int i = 0; i < N; i++)
 		for (int j = 0; j < N; j++) {
+      //save value into mat
 			inputf >> mat[convert_dimension_2D_1D(i, j, N)];
 		}
 	return 0;
@@ -71,7 +70,7 @@ int print_result(bool has_negative_cycle, int *dist) {
 	outputf.close();
 	return 0;
 }
-}//namespace utils
+}
 
 
 __global__ void bellman_ford_one_iter(int n, int *d_mat, int *d_dist, bool *d_has_next, int iter_num){
@@ -79,6 +78,7 @@ __global__ void bellman_ford_one_iter(int n, int *d_mat, int *d_dist, bool *d_ha
 	int elementSkip = blockDim.x * gridDim.x;
 
 	if(global_tid >= n) return;
+
 	for(int u = 0 ; u < n ; u ++){
 		for(int v = global_tid; v < n; v+= elementSkip){
 			int weight = d_mat[u * n + v];
@@ -111,26 +111,30 @@ void bellman_ford(int blocksPerGrid, int threadsPerBlock, int n, int *mat, int *
 	int *d_mat, *d_dist;
 	bool *d_has_next, h_has_next;
 
+  // allocate space on GPU
 	cudaMalloc(&d_mat, sizeof(int) * n * n);
 	cudaMalloc(&d_dist, sizeof(int) *n);
 	cudaMalloc(&d_has_next, sizeof(bool));
 
 
 	*has_negative_cycle = false;
-
+  // set elements to INF in dist array
 	for(int i = 0 ; i < n; i ++){
 		dist[i] = INF;
 	}
-
+  
 	dist[0] = 0;
+  // copy memory from cpu to gpu
 	cudaMemcpy(d_mat, mat, sizeof(int) * n * n, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_dist, dist, sizeof(int) * n, cudaMemcpyHostToDevice);
 
 	for(;;){
 		h_has_next = false;
+    // copy memory back from gpu to cpu
 		cudaMemcpy(d_has_next, &h_has_next, sizeof(bool), cudaMemcpyHostToDevice);
 
 		bellman_ford_one_iter<<<blocks, threads>>>(n, d_mat, d_dist, d_has_next, iter_num);
+    // copy memory back from gpu to cpu
 		cudaMemcpy(&h_has_next, d_has_next, sizeof(bool), cudaMemcpyDeviceToHost);
 
 		iter_num++;
@@ -146,7 +150,7 @@ void bellman_ford(int blocksPerGrid, int threadsPerBlock, int n, int *mat, int *
 	if(! *has_negative_cycle){
 		cudaMemcpy(dist, d_dist, sizeof(int) * n, cudaMemcpyDeviceToHost);
 	}
-
+  // free memory on gpu
 	cudaFree(d_mat);
 	cudaFree(d_dist);
 	cudaFree(d_has_next);
@@ -167,8 +171,9 @@ int main(int argc, char **argv) {
 	int *dist;
 	bool has_negative_cycle = false;
 
-
+  // read file
 	assert(utils::read_file(filename) == 0);
+  // malloc and init to zero 
 	dist = (int *) calloc(sizeof(int), utils::N);
 
 
