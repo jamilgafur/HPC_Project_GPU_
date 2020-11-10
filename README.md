@@ -1,7 +1,7 @@
 ### cuda_bellman_ford
 Compile:
 ```Bash
-$ nvcc -std=c++11 -arch=sm_52 -o cuda_bellman_ford cuda_bellman_ford.cu
+$ nvcc -std=c++11 -o cuda_bellman_ford cuda_bellman_ford.cu
 ```
 Run:
 ```Bash
